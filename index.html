@@ -378,9 +378,10 @@ function registerPage() {
     <p>ที่เครื่องชั่ง: <b>ตั้งค่า &gt; เครือข่าย &gt; ลงทะเบียนผู้ใช้</b> จอจะแสดง QR และ<b>รหัส 4 หลัก</b> (ใช้ได้ 10 นาที)</p>
     <label>รหัสเครื่อง (Device ID)</label><input id="rg_dev" value="${esc(store.get('bs_reg'))}" placeholder="เช่น BS-0001" autocapitalize="characters" style="width:100%;margin-bottom:10px">
     <label>รหัส 4 หลักบนจอเครื่อง</label><input id="rg_code" class="code" inputmode="numeric" maxlength="4" autocomplete="one-time-code">
-    <div class="row" style="margin-top:12px"><button class="pri" id="rg_go">ยืนยัน</button></div><div id="rg_msg"></div>
+    <div class="row" style="margin-top:12px"><button class="pri" id="rg_go">ยืนยัน</button>${pending ? '' : '<a class="back" id="rg_skip">ข้าม</a>'}</div><div id="rg_msg"></div>
     ${pending ? '<p class="muted" style="margin-top:14px">ถ้าเป็นหมอหรือพยาบาล ไม่ต้องลงทะเบียนตรงนี้ — แจ้งแอดมินให้กำหนดสิทธิ์</p>' : ''}</div>`);
   (store.get('bs_reg') ? $('#rg_code') : $('#rg_dev')).focus();
+  if ($('#rg_skip')) $('#rg_skip').onclick = () => { store.set('bs_reg', ''); location.hash = '#patients'; render(); };
   $('#rg_go').onclick = async () => {
     const dev = $('#rg_dev').value.trim().toUpperCase(), code = $('#rg_code').value.trim();
     if (!/^[A-Z0-9_-]{3,24}$/.test(dev)) return flash($('#rg_msg'), 'กรุณาใส่รหัสเครื่อง', 'err');
@@ -398,7 +399,7 @@ async function render() {
     if (!s) return loginPage();
     me = await api.me();
     const h = location.hash;
-    if (me.role === 'pending' || h === '#register' || (me.role === 'patient' && store.get('bs_reg'))) return registerPage();
+    if (me.role === 'pending' || h === '#register' || store.get('bs_reg')) return registerPage();
     if (h.startsWith('#p-')) return patientPage(h.slice(3));
     if (h === '#alerts') return alertsPage();
     if (h === '#admin' && me.role === 'admin') return adminPage();
