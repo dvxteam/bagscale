@@ -66,7 +66,7 @@ const CODE_TH = { drain_start:'เริ่มปล่อยน้ำ', drain_d
   fill_target:'น้ำยาเข้าครบตามกำหนด', close_ok:'ปิดสายครบขั้นตอน', close_skip:'ปิดสาย (ไม่ได้ติ๊กครบ)' };
 const stepsCell = x => x.guided == null ? '<span class="muted">–</span>'
   : x.skipped ? `<span class="badge amber">ข้าม ${x.skipped}</span>` : '<span class="badge green">ครบ</span>';
-const ROLE_TH = { admin:'แอดมิน', staff:'หมอ/พยาบาล', patient:'ผู้ป่วย/ญาติ', pending:'รออนุมัติ' };
+const ROLE_TH = { admin:'แอดมิน', staff:'หมอ/พยาบาล', patient:'ผู้ใช้งาน', pending:'รออนุมัติ' };
 const ONLINE_MIN = 15;   // เห็นเครื่องภายใน 15 นาที = ออนไลน์
 
 // ---------------- ชั้นข้อมูล: Supabase จริง ----------------
@@ -344,7 +344,7 @@ async function adminPage() {
       <td><span class="dot ${online(d.last_seen) ? 'on' : ''}"></span>${ago(d.last_seen)}${d.rssi ? ` <span class="muted">(${d.rssi} dBm)</span>` : ''}</td>
       <td class="hide-sm">${esc(d.fw_version || '–')}</td></tr>`).join('')}</tbody></table></div>
 
-  <h2>ผู้ใช้และสิทธิ์</h2><div class="card"><p class="muted" style="margin-top:0">ผู้สมัครใหม่จะเป็น "รออนุมัติ" จนกว่าจะกำหนดบทบาท · หมอ/พยาบาลเห็นเฉพาะผู้ป่วยที่ติ๊กให้ · ผู้ป่วย/ญาติเห็นเฉพาะคนที่ติ๊กให้</p>
+  <h2>ผู้ใช้และสิทธิ์</h2><div class="card"><p class="muted" style="margin-top:0">ผู้สมัครใหม่จะเป็น "รออนุมัติ" จนกว่าจะกำหนดบทบาท · หมอ/พยาบาลเห็นเฉพาะผู้ป่วยที่ติ๊กให้ · ผู้ใช้งานเห็นเฉพาะผู้ป่วยที่ติ๊กให้</p>
     <table><thead><tr><th>ผู้ใช้</th><th>บทบาท</th><th>ผู้ป่วยที่เข้าถึงได้</th></tr></thead><tbody>
     ${users.map(u => { const tbl = u.role === 'staff' ? 'staff' : u.role === 'patient' ? 'users' : null, col = tbl === 'staff' ? 'staff_id' : 'user_id';
       return `<tr><td><b>${esc(u.full_name || '')}</b><br><span class="muted">${esc(u.email || '')}</span></td>
