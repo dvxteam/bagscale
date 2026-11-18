@@ -1,0 +1,378 @@
+TEST-ม-123<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BagScale — ระบบติดตามการล้างไตทางช่องท้อง</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<style>
+  :root { --bg:#f5f7fa; --card:#fff; --ink:#1d2433; --muted:#667085; --line:#e4e8ee; --blue:#2f6fde; --amber:#d98a00;
+          --green:#1f9d62; --red:#d64545; --chip:#eef2f8; }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family:'Sarabun',system-ui,sans-serif; background:var(--bg); color:var(--ink); font-size:15px; }
+  header { background:#16233b; color:#fff; padding:10px 20px; display:flex; align-items:center; gap:16px; flex-wrap:wrap; }
+  header b { font-size:18px; } header .sp { flex:1; }
+  header nav a { color:#c9d6ee; text-decoration:none; padding:6px 10px; border-radius:6px; }
+  header nav a.on, header nav a:hover { background:#2a3b5c; color:#fff; }
+  header .who { font-size:13px; color:#c9d6ee; }
+  main { max-width:1180px; margin:0 auto; padding:20px; }
+  h1 { font-size:22px; margin:4px 0 16px; } h2 { font-size:18px; margin:24px 0 10px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:16px; margin-bottom:16px; }
+  table { width:100%; border-collapse:collapse; } th, td { text-align:left; padding:8px 10px; border-bottom:1px solid var(--line); }
+  th { font-size:13px; color:var(--muted); font-weight:600; } td.num, th.num { text-align:right; font-variant-numeric:tabular-nums; }
+  tr.click { cursor:pointer; } tr.click:hover { background:#f2f6fd; }
+  .dot { display:inline-block; width:9px; height:9px; border-radius:50%; margin-right:6px; background:#b9c0cc; }
+  .dot.on { background:var(--green); }
+  .badge { display:inline-block; padding:1px 8px; border-radius:999px; font-size:12px; background:var(--chip); }
+  .badge.red { background:#fde8e8; color:var(--red); } .badge.amber { background:#fff3dc; color:#9a6200; } .badge.green { background:#e3f6ec; color:var(--green); }
+  .pos { color:var(--green); } .neg { color:var(--red); } .muted { color:var(--muted); }
+  button, .btn { font:inherit; border:1px solid var(--line); background:#fff; padding:6px 12px; border-radius:8px; cursor:pointer; }
+  button.pri { background:var(--blue); color:#fff; border-color:var(--blue); } button.sm { padding:2px 10px; font-size:13px; }
+  button:disabled { opacity:.5; cursor:default; }
+  input, select, textarea { font:inherit; padding:6px 10px; border:1px solid #cdd4de; border-radius:8px; background:#fff; }
+  label { display:block; font-size:13px; color:var(--muted); margin-bottom:3px; }
+  .row { display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end; } .row > div { min-width:140px; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:12px; }
+  .stat { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:12px 14px; }
+  .stat .v { font-size:24px; font-weight:700; } .stat .l { font-size:13px; color:var(--muted); }
+  .login { max-width:380px; margin:8vh auto; } .login input { width:100%; margin-bottom:10px; }
+  .google { width:100%; display:flex; align-items:center; justify-content:center; gap:10px; padding:10px; background:#fff; border:1px solid #d0d5dd; border-radius:8px; font:inherit; font-weight:600; cursor:pointer; margin:6px 0 4px; }
+  .or { display:flex; align-items:center; gap:10px; color:var(--muted, #667085); font-size:13px; margin:12px 0; } .or::before, .or::after { content:''; flex:1; border-top:1px solid #e4e7ec; }
+  .msg { padding:10px 12px; border-radius:8px; background:#fff3dc; margin:10px 0; } .msg.err { background:#fde8e8; } .msg.ok { background:#e3f6ec; }
+  .key { font-family:ui-monospace,Menlo,monospace; font-size:18px; background:#16233b; color:#fff; padding:8px 12px; border-radius:8px; letter-spacing:1px; }
+  .demo { background:#fff3dc; text-align:center; font-size:13px; padding:4px; }
+  svg text { font-family:'Sarabun',sans-serif; }
+  .back { color:var(--blue); cursor:pointer; text-decoration:none; }
+  @media (max-width:700px) { .hide-sm { display:none; } main { padding:12px; } }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+// =====================================================================
+//  ตั้งค่า: ใส่ค่าจาก Supabase > Project Settings > API (anon key ใส่ในหน้าเว็บได้ ปลอดภัยเพราะมี RLS คุม)
+// =====================================================================
+const SUPABASE_URL = 'https://drjcpeujuilcqbmotfts.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_WuGB1cZokpTOo1OnRH8sBQ_rC3sWLgL';
+const DEMO = location.hash === '#demo' || SUPABASE_URL.includes('YOUR-PROJECT');
+
+const ALERT_CODES = ['low_drain', 'no_flow', 'overload', 'sensor_err'];
+const CODE_TH = { drain_start:'เริ่มปล่อยน้ำ', drain_done:'ปล่อยน้ำครบ', fill_start:'เริ่มเติมน้ำยา', low_drain:'น้ำทิ้งน้อยผิดปกติ',
+  no_flow:'น้ำไม่ไหล', overload:'น้ำหนักเกิน', sensor_err:'เซนเซอร์ผิดปกติ', test:'ทดสอบการเชื่อมต่อ',
+  fill_target:'น้ำยาเข้าครบตามกำหนด', close_ok:'ปิดสายครบขั้นตอน', close_skip:'ปิดสาย (ไม่ได้ติ๊กครบ)' };
+const stepsCell = x => x.guided == null ? '<span class="muted">–</span>'
+  : x.skipped ? `<span class="badge amber">ข้าม ${x.skipped}</span>` : '<span class="badge green">ครบ</span>';
+const ROLE_TH = { admin:'แอดมิน', staff:'หมอ/พยาบาล', patient:'ผู้ป่วย/ญาติ', pending:'รออนุมัติ' };
+const ONLINE_MIN = 15;   // เห็นเครื่องภายใน 15 นาที = ออนไลน์
+
+// ---------------- ชั้นข้อมูล: Supabase จริง ----------------
+function supaApi() {
+  const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  const ok = ({ data, error }) => { if (error) throw new Error(error.message); return data; };
+  let uid = null;
+  return {
+    async session() { const { data } = await sb.auth.getSession(); uid = data.session?.user?.id ?? null; return data.session; },
+    async signIn(email, password) { ok(await sb.auth.signInWithPassword({ email, password })); return this.session(); },
+    async signInGoogle() { ok(await sb.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: location.origin + location.pathname } })); },
+    async signUp(email, password, full_name) { ok(await sb.auth.signUp({ email, password, options: { data: { full_name } } })); },
+    async signOut() { await sb.auth.signOut(); uid = null; },
+    async me() { return ok(await sb.from('profiles').select('id,email,full_name,role').eq('id', uid).single()); },
+    async overview() { return ok(await sb.from('patient_overview').select('*').order('full_name')); },
+    async patient(id) { return ok(await sb.from('patients').select('*').eq('id', id).single()); },
+    async updatePatient(id, f) { ok(await sb.from('patients').update(f).eq('id', id)); },
+    async daily(id, days) {
+      const since = new Date(Date.now() - days * 864e5).toISOString().slice(0, 10);
+      return ok(await sb.from('daily_uf').select('*').eq('patient_id', id).gte('day', since).order('day'));
+    },
+    async exchanges(id, n) { return ok(await sb.from('exchanges').select('*').eq('patient_id', id).order('ended_at', { ascending: false }).limit(n)); },
+    async events(id, n) { return ok(await sb.from('events').select('*').eq('patient_id', id).order('occurred_at', { ascending: false }).limit(n)); },
+    async openAlerts() {
+      return ok(await sb.from('events').select('id,code,occurred_at,device_id,patient_id,patients(full_name)')
+        .is('ack_at', null).in('code', ALERT_CODES).order('occurred_at', { ascending: false }).limit(200));
+    },
+    async ack(id) { ok(await sb.from('events').update({ ack_at: new Date().toISOString(), ack_by: uid }).eq('id', id)); },
+    async profiles() { return ok(await sb.from('profiles').select('id,email,full_name,role').order('created_at')); },
+    async setRole(id, role) { ok(await sb.from('profiles').update({ role }).eq('id', id)); },
+    async patients() { return ok(await sb.from('patients').select('id,full_name,hn').order('full_name')); },
+    async createPatient(p) { return ok(await sb.from('patients').insert(p).select('id').single()); },
+    async devices() { return ok(await sb.from('devices').select('id,label,patient_id,last_seen,fw_version,rssi').order('id')); },
+    async registerDevice(id, label, patient) { return ok(await sb.rpc('register_device', { p_id: id, p_label: label || null, p_patient: patient || null })); },
+    async assignDevice(id, patient) { ok(await sb.from('devices').update({ patient_id: patient || null }).eq('id', id)); },
+    async links() {
+      return { staff: ok(await sb.from('patient_staff').select('*')), users: ok(await sb.from('patient_users').select('*')) };
+    },
+    async setLink(table, patient_id, user_col, user_id, on) {
+      if (on) ok(await sb.from(table).upsert({ patient_id, [user_col]: user_id }));
+      else ok(await sb.from(table).delete().eq('patient_id', patient_id).eq(user_col, user_id));
+    },
+  };
+}
+
+// ---------------- ชั้นข้อมูล: โหมดสาธิต (ข้อมูลสมมติ ไม่ต่อเซิร์ฟเวอร์) ----------------
+function demoApi() {
+  const now = Date.now(), H = 36e5, iso = t => new Date(t).toISOString();
+  const P = [
+    { id:'p1', hn:'HN-1001', full_name:'สมชาย ใจดี', phone:'081-111-1111', line_user_id:'', target_fill:2000, min_drain:1500, stable_sec:30, notes:'', active:true },
+    { id:'p2', hn:'HN-1002', full_name:'มาลี ศรีสุข', phone:'', line_user_id:'', target_fill:2200, min_drain:1600, stable_sec:30, notes:'', active:true },
+    { id:'p3', hn:'HN-1003', full_name:'ประเสริฐ วงศ์ไทย', phone:'', line_user_id:'', target_fill:2000, min_drain:1500, stable_sec:30, notes:'', active:true },
+  ];
+  const D = [ { id:'BS-0001', label:'เครื่องต้นแบบ', patient_id:'p1', last_seen:iso(now - 3 * 6e4), fw_version:'v4', rssi:-58 },
+              { id:'BS-0002', label:'', patient_id:'p2', last_seen:iso(now - 5 * H), fw_version:'v4', rssi:-71 },
+              { id:'BS-0003', label:'สำรอง', patient_id:null, last_seen:null, fw_version:null, rssi:null } ];
+  let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  const X = [];
+  for (const p of ['p1', 'p2']) for (let d = 0; d < 30; d++) for (let k = 0; k < 4; k++) {
+    const fill = p === 'p2' ? 2200 : 2000, drain = fill + Math.round((rnd() - 0.35) * 400);
+    X.push({ id:X.length + 1, patient_id:p, device_id:p === 'p1' ? 'BS-0001' : 'BS-0002', ended_at:iso(now - d * 24 * H - k * 6 * H - 2 * H),
+             drain_ml:drain, fill_ml:fill, uf_ml:drain - fill, drain_min:15 + Math.round(rnd() * 10), fill_min:9 + Math.round(rnd() * 5),
+             flush_ml:60 + Math.round(rnd() * 40), guided:true, skipped:rnd() < 0.12 ? 1 + Math.floor(rnd() * 2) : 0 });
+  }
+  const E = [ { id:1, patient_id:'p1', device_id:'BS-0001', code:'low_drain', occurred_at:iso(now - 50 * 6e4), ack_at:null },
+              { id:2, patient_id:'p2', device_id:'BS-0002', code:'no_flow', occurred_at:iso(now - 6 * H), ack_at:null },
+              { id:3, patient_id:'p1', device_id:'BS-0001', code:'drain_done', occurred_at:iso(now - 2 * H), ack_at:null } ];
+  const U = [ { id:'u1', email:'admin@demo', full_name:'ผู้ดูแลระบบ', role:'admin' }, { id:'u2', email:'dr.a@demo', full_name:'พญ.อรุณี', role:'staff' },
+              { id:'u3', email:'family@demo', full_name:'ลูกสาวคุณสมชาย', role:'patient' }, { id:'u4', email:'new@demo', full_name:'ผู้ใช้ใหม่', role:'pending' } ];
+  const L = { staff:[{ patient_id:'p1', staff_id:'u2' }, { patient_id:'p2', staff_id:'u2' }], users:[{ patient_id:'p1', user_id:'u3' }] };
+  const bkk = t => new Date(t).toLocaleDateString('en-CA', { timeZone:'Asia/Bangkok' }), today = bkk(now);
+  let signed = false; const wait = v => new Promise(r => setTimeout(() => r(v), 80));
+  return {
+    async session() { return signed ? { user:{ id:'u1' } } : null; },
+    async signIn() { signed = true; return wait({}); }, async signInGoogle() { signed = true; render(); }, async signUp() {}, async signOut() { signed = false; },
+    async me() { return U[0]; },
+    async overview() {
+      return wait(P.map(p => { const d = D.find(x => x.patient_id === p.id), xs = X.filter(x => x.patient_id === p.id), t = xs.filter(x => bkk(x.ended_at) === today);
+        return { ...p, device_id:d?.id ?? null, last_seen:d?.last_seen ?? null, fw_version:d?.fw_version, rssi:d?.rssi,
+          last_exchange_at:xs[0]?.ended_at ?? null, exchanges_today:t.length, uf_today:t.reduce((s, x) => s + x.uf_ml, 0),
+          open_alerts:E.filter(e => e.patient_id === p.id && !e.ack_at && ALERT_CODES.includes(e.code)).length }; }));
+    },
+    async patient(id) { return wait({ ...P.find(p => p.id === id) }); },
+    async updatePatient(id, f) { Object.assign(P.find(p => p.id === id), f); },
+    async daily(id, days) {
+      const m = {}; for (const x of X.filter(x => x.patient_id === id)) { const k = bkk(x.ended_at); (m[k] ??= { day:k, exchanges:0, drain_ml:0, fill_ml:0, uf_ml:0 });
+        m[k].exchanges++; m[k].drain_ml += x.drain_ml; m[k].fill_ml += x.fill_ml; m[k].uf_ml += x.uf_ml; }
+      return wait(Object.values(m).sort((a, b) => a.day < b.day ? -1 : 1).slice(-days));
+    },
+    async exchanges(id, n) { return wait(X.filter(x => x.patient_id === id).slice(0, n)); },
+    async events(id, n) { return wait(E.filter(e => e.patient_id === id).slice(0, n)); },
+    async openAlerts() { return wait(E.filter(e => !e.ack_at && ALERT_CODES.includes(e.code)).map(e => ({ ...e, patients:{ full_name:P.find(p => p.id === e.patient_id).full_name } }))); },
+    async ack(id) { E.find(e => e.id === id).ack_at = iso(Date.now()); },
+    async profiles() { return wait(U); }, async setRole(id, role) { U.find(u => u.id === id).role = role; },
+    async patients() { return wait(P.map(({ id, full_name, hn }) => ({ id, full_name, hn }))); },
+    async createPatient(p) { const id = 'p' + (P.length + 1); P.push({ id, target_fill:2000, min_drain:1500, stable_sec:30, active:true, ...p }); return { id }; },
+    async devices() { return wait(D); },
+    async registerDevice(id, label, patient) { let d = D.find(x => x.id === id); if (!d) D.push(d = { id, label, patient_id:null, last_seen:null });
+      if (patient) d.patient_id = patient; return 'a1b2c3d4e5f6a7b8c9d0e1f2'; },
+    async assignDevice(id, patient) { D.find(x => x.id === id).patient_id = patient || null; },
+    async links() { return L; },
+    async setLink(table, patient_id, col, user_id, on) { const a = table === 'patient_staff' ? L.staff : L.users;
+      const i = a.findIndex(r => r.patient_id === patient_id && r[col] === user_id); if (on && i < 0) a.push({ patient_id, [col]:user_id }); if (!on && i >= 0) a.splice(i, 1); },
+  };
+}
+
+const api = DEMO ? demoApi() : supaApi();
+let me = null;
+
+// ---------------- เครื่องมือ ----------------
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
+const fmtDT = t => t ? new Date(t).toLocaleString('th-TH', { timeZone:'Asia/Bangkok', dateStyle:'short', timeStyle:'short' }) : '–';
+const ago = t => { if (!t) return 'ไม่เคยเชื่อมต่อ'; const m = Math.round((Date.now() - Date.parse(t)) / 6e4);
+  return m < 1 ? 'เมื่อสักครู่' : m < 60 ? `${m} นาทีที่แล้ว` : m < 1440 ? `${Math.round(m / 60)} ชม.ที่แล้ว` : `${Math.round(m / 1440)} วันที่แล้ว`; };
+const online = t => t && Date.now() - Date.parse(t) < ONLINE_MIN * 6e4;
+const sgn = n => (n > 0 ? '+' : '') + n;
+const ufCls = n => n >= 0 ? 'pos' : 'neg';
+const isStaff = () => me && (me.role === 'admin' || me.role === 'staff');
+
+function shell(active, body) {
+  const nav = [['#patients', 'ผู้ป่วย'], ['#alerts', 'การแจ้งเตือน']];
+  if (me?.role === 'admin') nav.push(['#admin', 'จัดการระบบ']);
+  $('#app').innerHTML = (DEMO ? '<div class="demo">โหมดสาธิต — ข้อมูลสมมติ ยังไม่ได้เชื่อม Supabase</div>' : '') +
+    `<header><b>BagScale</b><nav>${nav.map(([h, t]) => `<a href="${h}" class="${active === h ? 'on' : ''}">${t}</a>`).join('')}</nav>
+     <span class="sp"></span><span class="who">${esc(me.full_name || me.email)} · ${ROLE_TH[me.role]}</span>
+     <button class="sm" id="logout">ออกจากระบบ</button></header><main>${body}</main>`;
+  $('#logout').onclick = async () => { await api.signOut(); me = null; location.hash = ''; render(); };
+}
+const flash = (el, text, cls = 'ok') => { el.innerHTML = `<div class="msg ${cls}">${esc(text)}</div>`; };
+
+// ---------------- หน้าเข้าสู่ระบบ ----------------
+function loginPage(note = '') {
+  $('#app').innerHTML = (DEMO ? '<div class="demo">โหมดสาธิต — กด เข้าสู่ระบบ ได้เลย</div>' : '') + `
+  <div class="login card"><h1>BagScale</h1><p class="muted">ระบบติดตามการล้างไตทางช่องท้องที่บ้าน</p>
+   <div id="lmsg">${note}</div>
+   <button class="google" id="gg"><svg width="18" height="18" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-7.9l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z"/></svg> เข้าสู่ระบบด้วย Google</button>
+   <div class="or"><span>หรือใช้อีเมล</span></div>
+   <label>อีเมล</label><input id="em" type="email" autocomplete="username">
+   <label>รหัสผ่าน</label><input id="pw" type="password" autocomplete="current-password">
+   <div id="nameRow" style="display:none"><label>ชื่อ-นามสกุล</label><input id="nm"></div>
+   <div class="row"><button class="pri" id="go">เข้าสู่ระบบ</button><a class="back" id="toggle">สมัครบัญชีใหม่</a></div></div>`;
+  let mode = 'in';
+  $('#gg').onclick = async () => { try { await api.signInGoogle(); } catch (e) { flash($('#lmsg'), 'ไม่สำเร็จ: ' + e.message, 'err'); } };
+  $('#toggle').onclick = () => { mode = mode === 'in' ? 'up' : 'in'; $('#nameRow').style.display = mode === 'up' ? '' : 'none';
+    $('#go').textContent = mode === 'in' ? 'เข้าสู่ระบบ' : 'สมัคร'; $('#toggle').textContent = mode === 'in' ? 'สมัครบัญชีใหม่' : 'มีบัญชีแล้ว'; };
+  $('#go').onclick = async () => {
+    const em = $('#em').value.trim(), pw = $('#pw').value;
+    try {
+      if (mode === 'up') { await api.signUp(em, pw, $('#nm').value.trim());
+        flash($('#lmsg'), 'สมัครแล้ว — กรุณายืนยันอีเมล แล้วรอแอดมินให้สิทธิ์ใช้งาน'); return; }
+      await api.signIn(em, pw); render();
+    } catch (e) { flash($('#lmsg'), 'ไม่สำเร็จ: ' + e.message, 'err'); }
+  };
+}
+
+// ---------------- รายชื่อผู้ป่วย ----------------
+async function patientsPage() {
+  shell('#patients', '<h1>ผู้ป่วย</h1><div id="sum" class="grid"></div><div class="card" id="list">กำลังโหลด…</div>');
+  const rows = await api.overview();
+  const on = rows.filter(r => online(r.last_seen)).length, al = rows.reduce((s, r) => s + Number(r.open_alerts), 0);
+  $('#sum').innerHTML = `<div class="stat"><div class="v">${rows.length}</div><div class="l">ผู้ป่วยในความดูแล</div></div>
+    <div class="stat"><div class="v">${on}</div><div class="l">เครื่องออนไลน์</div></div>
+    <div class="stat"><div class="v ${al ? 'neg' : ''}">${al}</div><div class="l">การเตือนที่ยังไม่รับทราบ</div></div>`;
+  if (!rows.length) { $('#list').innerHTML = '<p class="muted">ยังไม่มีผู้ป่วยที่คุณมีสิทธิ์ดู</p>'; return; }
+  $('#list').innerHTML = `<table><thead><tr><th>ผู้ป่วย</th><th class="hide-sm">เครื่อง</th><th>สถานะเครื่อง</th>
+    <th class="num">รอบวันนี้</th><th class="num">UF วันนี้ (มล.)</th><th class="hide-sm">รอบล่าสุด</th><th>เตือน</th></tr></thead><tbody>
+    ${rows.map(r => `<tr class="click" data-id="${r.id}"><td><b>${esc(r.full_name)}</b><br><span class="muted">${esc(r.hn || '')}</span></td>
+      <td class="hide-sm">${esc(r.device_id || '–')}</td>
+      <td><span class="dot ${online(r.last_seen) ? 'on' : ''}"></span>${r.device_id ? ago(r.last_seen) : '<span class="muted">ไม่มีเครื่อง</span>'}</td>
+      <td class="num">${r.exchanges_today}</td><td class="num ${ufCls(r.uf_today)}">${sgn(r.uf_today)}</td>
+      <td class="hide-sm">${fmtDT(r.last_exchange_at)}</td>
+      <td>${Number(r.open_alerts) ? `<span class="badge red">${r.open_alerts}</span>` : '<span class="badge green">ปกติ</span>'}</td></tr>`).join('')}
+    </tbody></table>`;
+  document.querySelectorAll('tr.click').forEach(tr => tr.onclick = () => location.hash = '#p-' + tr.dataset.id);
+}
+
+// กราฟ UF รายวัน (svg) — แท่งบวกเขียว ลบแดง รอบศูนย์
+function ufChart(days) {
+  if (!days.length) return '<p class="muted">ยังไม่มีข้อมูลรอบล้างไต</p>';
+  const W = 760, H = 220, L = 48, R = 12, T = 16, B = 30, n = days.length, bw = (W - L - R) / n;
+  const vals = days.map(d => Number(d.uf_ml)), mx = Math.max(100, ...vals.map(Math.abs)), step = mx > 1000 ? 500 : mx > 400 ? 200 : 100;
+  const top = Math.ceil(Math.max(0, ...vals) / step) * step || step, bot = Math.floor(Math.min(0, ...vals) / step) * step;
+  const Y = v => T + (top - v) / (top - bot) * (H - T - B);
+  let g = '';
+  for (let v = bot; v <= top; v += step) g += `<line x1="${L}" x2="${W - R}" y1="${Y(v)}" y2="${Y(v)}" stroke="${v === 0 ? '#98a2b3' : '#eef1f5'}"/>
+    <text x="${L - 6}" y="${Y(v) + 4}" text-anchor="end" font-size="11" fill="#667085">${sgn(v)}</text>`;
+  days.forEach((d, i) => { const v = Number(d.uf_ml), x = L + i * bw + bw * 0.15, y0 = Y(Math.max(0, v)), h = Math.abs(Y(v) - Y(0));
+    g += `<rect x="${x}" y="${y0}" width="${bw * 0.7}" height="${Math.max(1, h)}" rx="2" fill="${v >= 0 ? '#1f9d62' : '#d64545'}"><title>${d.day}: UF ${sgn(v)} มล. (${d.exchanges} รอบ)</title></rect>`;
+    if (i % Math.ceil(n / 10) === 0 || i === n - 1) g += `<text x="${x + bw * 0.35}" y="${H - 10}" text-anchor="middle" font-size="11" fill="#667085">${d.day.slice(8)}/${d.day.slice(5, 7)}</text>`; });
+  return `<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="UF รายวัน">${g}</svg>`;
+}
+
+// ---------------- หน้าผู้ป่วยรายคน ----------------
+async function patientPage(id) {
+  shell('#patients', '<a class="back" href="#patients">← รายชื่อผู้ป่วย</a><div id="body">กำลังโหลด…</div>');
+  const [p, days, xs, evs] = await Promise.all([api.patient(id), api.daily(id, 30), api.exchanges(id, 60), api.events(id, 40)]);
+  const last7 = days.slice(-7), avg = last7.length ? Math.round(last7.reduce((s, d) => s + Number(d.uf_ml), 0) / last7.length) : 0;
+  const today = days.find(d => d.day === new Date().toLocaleDateString('en-CA', { timeZone:'Asia/Bangkok' }));
+  const canEdit = isStaff();
+  $('#body').innerHTML = `<h1>${esc(p.full_name)} <span class="muted" style="font-size:15px">${esc(p.hn || '')}</span></h1>
+   <div class="grid"><div class="stat"><div class="v ${ufCls(today?.uf_ml ?? 0)}">${sgn(today?.uf_ml ?? 0)}</div><div class="l">UF วันนี้ (มล.) · ${today?.exchanges ?? 0} รอบ</div></div>
+     <div class="stat"><div class="v ${ufCls(avg)}">${sgn(avg)}</div><div class="l">UF เฉลี่ยต่อวัน 7 วัน (มล.)</div></div>
+     <div class="stat"><div class="v">${p.target_fill}</div><div class="l">เป้าน้ำยาเข้าต่อรอบ (มล.)</div></div></div>
+   <h2>UF รายวัน 30 วัน</h2><div class="card">${ufChart(days)}</div>
+   ${canEdit ? `<h2>ตั้งค่าเครื่องของผู้ป่วยคนนี้</h2><div class="card"><div class="row">
+     <div><label>เป้าน้ำยาเข้า (มล.) — เครื่องเตือนด้วยเสียง</label><input id="td" type="number" min="500" max="4500" step="50" value="${p.target_fill}"></div>
+     <div><label>เตือนน้ำทิ้งน้อยกว่า (มล.)</label><input id="md" type="number" min="0" max="4500" step="50" value="${p.min_drain}"></div>
+     <div><label>เวลาน้ำหนักนิ่ง ±10 ก. (วินาที)</label><input id="ss" type="number" min="10" max="600" step="5" value="${p.stable_sec}"></div>
+     <div style="flex:1"><label>LINE User ID รับแจ้งเตือน (คั่นด้วย ,) — ปิดการส่ง LINE ชั่วคราว</label><input id="ln" style="width:100%" value="${esc(p.line_user_id || '')}"></div>
+     <button class="pri" id="save">บันทึก</button></div><div id="smsg"></div>
+     <p class="muted" style="margin:8px 0 0">เครื่องจะได้รับค่าใหม่ในครั้งถัดไปที่ส่งข้อมูลเข้าเซิร์ฟเวอร์</p></div>` : ''}
+   <h2>การแจ้งเตือนและเหตุการณ์</h2><div class="card">${evs.length ? `<table><thead><tr><th>เวลา</th><th>เหตุการณ์</th><th class="hide-sm">เครื่อง</th><th></th></tr></thead><tbody>
+     ${evs.map(e => `<tr><td>${fmtDT(e.occurred_at)}</td><td>${ALERT_CODES.includes(e.code) ? `<span class="badge ${e.ack_at ? '' : 'red'}">${esc(CODE_TH[e.code] || e.code)}</span>` : esc(CODE_TH[e.code] || e.code)}</td>
+       <td class="hide-sm">${esc(e.device_id || '')}</td><td>${ALERT_CODES.includes(e.code) && !e.ack_at && canEdit ? `<button class="sm" data-ack="${e.id}">รับทราบ</button>` : e.ack_at ? '<span class="muted">รับทราบแล้ว</span>' : ''}</td></tr>`).join('')}
+     </tbody></table>` : '<p class="muted">ไม่มีเหตุการณ์</p>'}</div>
+   <h2>ประวัติรอบล้างไต <button class="sm" id="csv">ส่งออก CSV</button></h2><div class="card">${xs.length ? `<table><thead><tr><th>จบรอบ</th>
+     <th class="num">น้ำทิ้งออก</th><th class="num">น้ำยาเข้า</th><th class="num">UF</th><th class="num hide-sm">ไล่อากาศ</th><th class="num hide-sm">ปล่อย (นาที)</th><th class="num hide-sm">เติม (นาที)</th><th>ขั้นตอน</th></tr></thead><tbody>
+     ${xs.map(x => `<tr><td>${fmtDT(x.ended_at)}</td><td class="num">${x.drain_ml}</td><td class="num">${x.fill_ml}</td><td class="num ${ufCls(x.uf_ml)}">${sgn(x.uf_ml)}</td>
+       <td class="num hide-sm">${x.flush_ml ?? '–'}</td><td class="num hide-sm">${x.drain_min ?? '–'}</td><td class="num hide-sm">${x.fill_min ?? '–'}</td><td>${stepsCell(x)}</td></tr>`).join('')}</tbody></table>` : '<p class="muted">ยังไม่มีข้อมูล</p>'}</div>`;
+  document.querySelectorAll('[data-ack]').forEach(b => b.onclick = async () => { await api.ack(Number(b.dataset.ack)); patientPage(id); });
+  if (canEdit) $('#save').onclick = async () => {
+    try { await api.updatePatient(id, { target_fill:+$('#td').value, min_drain:+$('#md').value, stable_sec:+$('#ss').value, line_user_id:$('#ln').value.trim() || null });
+      flash($('#smsg'), 'บันทึกแล้ว'); } catch (e) { flash($('#smsg'), e.message, 'err'); } };
+  $('#csv').onclick = () => {
+    const lines = ['ended_at,drain_ml,fill_ml,uf_ml,flush_ml,drain_min,fill_min,guided,skipped', ...xs.map(x => [fmtDT(x.ended_at), x.drain_ml, x.fill_ml, x.uf_ml, x.flush_ml ?? '', x.drain_min ?? '', x.fill_min ?? '', x.guided ?? '', x.skipped ?? ''].join(','))];
+    const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob(['﻿' + lines.join('\n')], { type:'text/csv' }));
+    a.download = `uf_${p.hn || p.id}.csv`; a.click();
+  };
+}
+
+// ---------------- การแจ้งเตือนทั้งหมด ----------------
+async function alertsPage() {
+  shell('#alerts', '<h1>การแจ้งเตือนที่ยังไม่รับทราบ</h1><div class="card" id="al">กำลังโหลด…</div>');
+  const rows = await api.openAlerts();
+  $('#al').innerHTML = rows.length ? `<table><thead><tr><th>เวลา</th><th>ผู้ป่วย</th><th>เหตุการณ์</th><th class="hide-sm">เครื่อง</th><th></th></tr></thead><tbody>
+    ${rows.map(e => `<tr><td>${fmtDT(e.occurred_at)}</td><td><a class="back" href="#p-${e.patient_id}">${esc(e.patients?.full_name || '–')}</a></td>
+      <td><span class="badge red">${esc(CODE_TH[e.code] || e.code)}</span></td><td class="hide-sm">${esc(e.device_id || '')}</td>
+      <td>${isStaff() ? `<button class="sm" data-ack="${e.id}">รับทราบ</button>` : ''}</td></tr>`).join('')}</tbody></table>`
+    : '<p class="muted">ไม่มีการแจ้งเตือนค้าง</p>';
+  document.querySelectorAll('[data-ack]').forEach(b => b.onclick = async () => { await api.ack(Number(b.dataset.ack)); alertsPage(); });
+}
+
+// ---------------- จัดการระบบ (แอดมิน) ----------------
+async function adminPage() {
+  shell('#admin', '<h1>จัดการระบบ</h1><div id="adm">กำลังโหลด…</div>');
+  const [pts, devs, users, links] = await Promise.all([api.patients(), api.devices(), api.profiles(), api.links()]);
+  const pOpt = (sel) => `<option value="">— ไม่ผูก —</option>` + pts.map(p => `<option value="${p.id}" ${p.id === sel ? 'selected' : ''}>${esc(p.full_name)} ${esc(p.hn || '')}</option>`).join('');
+  $('#adm').innerHTML = `
+  <h2>เพิ่มผู้ป่วย</h2><div class="card"><div class="row">
+    <div><label>ชื่อ-นามสกุล *</label><input id="np_name"></div><div><label>HN</label><input id="np_hn"></div>
+    <div><label>โทรศัพท์</label><input id="np_ph"></div><div><label>LINE User ID</label><input id="np_line"></div>
+    <button class="pri" id="np_go">เพิ่มผู้ป่วย</button></div><div id="np_msg"></div></div>
+
+  <h2>เครื่องชั่ง</h2><div class="card">
+    <div class="row"><div><label>รหัสเครื่องใหม่ *</label><input id="nd_id" placeholder="BS-0001"></div><div><label>ชื่อเรียก</label><input id="nd_label"></div>
+      <div><label>ผูกกับผู้ป่วย</label><select id="nd_p">${pOpt(null)}</select></div><button class="pri" id="nd_go">ลงทะเบียน / ออกกุญแจใหม่</button></div>
+    <div id="nd_msg"></div>
+    <table style="margin-top:12px"><thead><tr><th>รหัส</th><th>ชื่อเรียก</th><th>ผู้ป่วย</th><th>สถานะ</th><th class="hide-sm">เฟิร์มแวร์</th></tr></thead><tbody>
+    ${devs.map(d => `<tr><td><b>${esc(d.id)}</b></td><td>${esc(d.label || '')}</td><td><select data-dev="${esc(d.id)}">${pOpt(d.patient_id)}</select></td>
+      <td><span class="dot ${online(d.last_seen) ? 'on' : ''}"></span>${ago(d.last_seen)}${d.rssi ? ` <span class="muted">(${d.rssi} dBm)</span>` : ''}</td>
+      <td class="hide-sm">${esc(d.fw_version || '–')}</td></tr>`).join('')}</tbody></table></div>
+
+  <h2>ผู้ใช้และสิทธิ์</h2><div class="card"><p class="muted" style="margin-top:0">ผู้สมัครใหม่จะเป็น "รออนุมัติ" จนกว่าจะกำหนดบทบาท · หมอ/พยาบาลเห็นเฉพาะผู้ป่วยที่ติ๊กให้ · ผู้ป่วย/ญาติเห็นเฉพาะคนที่ติ๊กให้</p>
+    <table><thead><tr><th>ผู้ใช้</th><th>บทบาท</th><th>ผู้ป่วยที่เข้าถึงได้</th></tr></thead><tbody>
+    ${users.map(u => { const tbl = u.role === 'staff' ? 'staff' : u.role === 'patient' ? 'users' : null, col = tbl === 'staff' ? 'staff_id' : 'user_id';
+      return `<tr><td><b>${esc(u.full_name || '')}</b><br><span class="muted">${esc(u.email || '')}</span></td>
+      <td><select data-role="${u.id}" ${u.id === me.id ? 'disabled title="เปลี่ยนบทบาทตัวเองไม่ได้"' : ''}>${Object.entries(ROLE_TH).map(([k, t]) => `<option value="${k}" ${u.role === k ? 'selected' : ''}>${t}</option>`).join('')}</select></td>
+      <td>${tbl ? pts.map(p => `<label style="display:inline-block;margin-right:12px;color:var(--ink)"><input type="checkbox" data-link="${tbl}|${p.id}|${u.id}|${col}"
+        ${links[tbl].some(l => l.patient_id === p.id && l[col] === u.id) ? 'checked' : ''}> ${esc(p.full_name)}</label>`).join('') : u.role === 'admin' ? '<span class="muted">ทุกคน</span>' : '<span class="muted">–</span>'}</td></tr>`; }).join('')}
+    </tbody></table><div id="u_msg"></div></div>`;
+
+  $('#np_go').onclick = async () => {
+    const full_name = $('#np_name').value.trim(); if (!full_name) return flash($('#np_msg'), 'กรุณาใส่ชื่อ', 'err');
+    try { await api.createPatient({ full_name, hn:$('#np_hn').value.trim() || null, phone:$('#np_ph').value.trim() || null, line_user_id:$('#np_line').value.trim() || null });
+      adminPage(); } catch (e) { flash($('#np_msg'), e.message, 'err'); } };
+  $('#nd_go').onclick = async () => {
+    const id = $('#nd_id').value.trim(); if (!/^[A-Za-z0-9_-]{3,24}$/.test(id)) return flash($('#nd_msg'), 'รหัสเครื่องใช้ A-Z 0-9 - _ ยาว 3-24 ตัว', 'err');
+    try { const key = await api.registerDevice(id, $('#nd_label').value.trim(), $('#nd_p').value);
+      $('#nd_msg').innerHTML = `<div class="msg ok">ลงทะเบียน <b>${esc(id)}</b> แล้ว — กุญแจเครื่อง (แสดงครั้งเดียว จดไว้ใส่ในหน้าตั้งค่า WiFi ของเครื่อง):<br><br>
+        <span class="key">${esc(key)}</span> <button class="sm" id="cp">คัดลอก</button><br><br>ถ้าลงทะเบียนรหัสเดิมซ้ำ กุญแจเก่าจะใช้ไม่ได้ทันที</div>`;
+      $('#cp').onclick = () => navigator.clipboard?.writeText(key).catch(() => {}); } catch (e) { flash($('#nd_msg'), e.message, 'err'); } };
+  document.querySelectorAll('[data-dev]').forEach(s => s.onchange = async () => { try { await api.assignDevice(s.dataset.dev, s.value); } catch (e) { alertErr(e); } });
+  document.querySelectorAll('[data-role]').forEach(s => s.onchange = async () => { try { await api.setRole(s.dataset.role, s.value); adminPage(); } catch (e) { alertErr(e); } });
+  document.querySelectorAll('[data-link]').forEach(c => c.onchange = async () => { const [tbl, p, u, col] = c.dataset.link.split('|');
+    try { await api.setLink(tbl === 'staff' ? 'patient_staff' : 'patient_users', p, col, u, c.checked); } catch (e) { c.checked = !c.checked; alertErr(e); } });
+  function alertErr(e) { flash($('#u_msg'), 'ไม่สำเร็จ: ' + e.message, 'err'); }
+}
+
+// ---------------- เส้นทาง ----------------
+async function render() {
+  try {
+    const s = await api.session();
+    if (!s) return loginPage();
+    me = await api.me();
+    if (me.role === 'pending') { shell('', '<div class="card"><h1>รอการอนุมัติ</h1><p>บัญชีของคุณยังไม่ได้รับสิทธิ์ กรุณาแจ้งแอดมินให้กำหนดบทบาท</p></div>'); return; }
+    const h = location.hash;
+    if (h.startsWith('#p-')) return patientPage(h.slice(3));
+    if (h === '#alerts') return alertsPage();
+    if (h === '#admin' && me.role === 'admin') return adminPage();
+    if (me.role === 'patient' && h !== '#patients') { const r = await api.overview(); if (r.length === 1) return patientPage(r[0].id); }
+    return patientsPage();
+  } catch (e) { $('#app').innerHTML = `<main><div class="msg err">เกิดข้อผิดพลาด: ${esc(e.message)}</div><button onclick="location.reload()">ลองใหม่</button></main>`; }
+}
+window.addEventListener('hashchange', render);
+setInterval(() => { const h = location.hash;   // รีเฟรชหน้ารายชื่อ/การเตือนทุก 1 นาที (หน้าที่มีฟอร์มไม่รีเฟรช กันข้อมูลที่กำลังพิมพ์หาย)
+  if (me && !document.hidden && (h === '' || h === '#patients' || h === '#alerts' || h === '#demo')) render(); }, 60000);
+render();
+</script>
+</body>
+</html>
